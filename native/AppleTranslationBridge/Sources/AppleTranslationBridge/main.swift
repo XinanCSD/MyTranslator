@@ -36,23 +36,25 @@ struct BridgeView: View {
         Color.clear
             .frame(width: 1, height: 1)
             .translationTask(configuration) { session in
-                do {
-                    let response = try await session.translate(request.text)
-                    completion(
-                        Response(
-                            ok: true,
-                            translation: response.targetText,
-                            error: nil
+                Task { @MainActor in
+                    do {
+                        let response = try await session.translate(request.text)
+                        completion(
+                            Response(
+                                ok: true,
+                                translation: response.targetText,
+                                error: nil
+                            )
                         )
-                    )
-                } catch {
-                    completion(
-                        Response(
-                            ok: false,
-                            translation: nil,
-                            error: String(describing: error)
+                    } catch {
+                        completion(
+                            Response(
+                                ok: false,
+                                translation: nil,
+                                error: String(describing: error)
+                            )
                         )
-                    )
+                    }
                 }
             }
     }
@@ -103,6 +105,7 @@ struct AppleTranslationBridge {
         app.run()
     }
 
+    @MainActor
     private static func writeAndExit(_ response: Response, status: Int32) {
         if let output = try? JSONEncoder().encode(response) {
             FileHandle.standardOutput.write(output)
