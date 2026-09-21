@@ -138,11 +138,17 @@ class LlamaServer:
         self.stop()
         raise TranslationError("Timed out waiting for llama-server.")
 
-    def translate(self, text, source_lang_name, target_lang_name):
+    def translate(self, text, source_lang_name, source_lang_code, target_lang_name, target_lang_code):
         prompt = (
             "<bos><start_of_turn>user\n"
-            f"Translate the following text into {target_lang_name}. "
-            "Produce only the translation, without any additional explanations or commentary.\n\n"
+            f"You are a professional {source_lang_name} ({source_lang_code}) to "
+            f"{target_lang_name} ({target_lang_code}) translator. "
+            f"Your goal is to accurately convey the meaning and nuances of the original "
+            f"{source_lang_name} text while adhering to {target_lang_name} grammar, "
+            f"vocabulary, and cultural sensitivities.\n"
+            f"Produce only the {target_lang_name} translation, without any additional "
+            f"explanations or commentary. Please translate the following "
+            f"{source_lang_name} text into {target_lang_name}:\n\n\n"
             f"{text.strip()}<end_of_turn>\n"
             "<start_of_turn>model\n"
         )
@@ -194,16 +200,19 @@ class TranslateGemmaBackend:
         self.server = LlamaServer(model_dir, model_file)
         self.server.start()
 
-
     def translate_many(self, text, source_lang, target_langs):
         results = {}
-        source_code = self.LANGUAGE_NAMES[source_lang][1]
+        source_name, source_code = self.LANGUAGE_NAMES[source_lang]
         for target in target_langs:
             if target in self.LANGUAGE_NAMES:
-                target_code = self.LANGUAGE_NAMES[target][1]
-                source_name = self.LANGUAGE_NAMES[source_lang][0]
-                target_name = self.LANGUAGE_NAMES[target][0]
-                results[target] = self.server.translate(text, source_name, target_name)
+                target_name, target_code = self.LANGUAGE_NAMES[target]
+                results[target] = self.server.translate(
+                    text,
+                    source_name,
+                    source_code,
+                    target_name,
+                    target_code,
+                )
         return results
 
     def close(self):
@@ -245,7 +254,7 @@ class AppleTranslationBackend:
 
         try:
             response = json.loads(stdout) if stdout else None
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             response = None
 
         if response is not None:
