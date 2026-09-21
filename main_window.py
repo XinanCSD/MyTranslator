@@ -8,12 +8,18 @@ from language_detector import detect_language
 from translator import TranslationError,TranslatorService
 logger=logging.getLogger(__name__)
 class TranslationWorker(QObject):
-    finished=Signal(int,dict); failed=Signal(int,str)
+    finished=Signal(int,dict,object); failed=Signal(int,str)
     def __init__(self,service,text,source,targets,generation): super().__init__(); self.service=service; self.text=text; self.source=source; self.targets=targets; self.generation=generation
     @Slot()
     def run(self):
-        try:self.finished.emit(self.generation,self.service.translate_many(self.text,self.source,self.targets))
-        except Exception as exc:logger.exception("Translation worker failed"); self.failed.emit(self.generation,str(exc))
+        try:
+            if self.service is None:
+                self.service = TranslatorService()
+            result = self.service.translate_many(self.text,self.source,self.targets)
+            self.finished.emit(self.generation,result,self.service)
+        except Exception as exc:
+            logger.exception("Translation worker failed")
+            self.failed.emit(self.generation,str(exc))
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle("MyTranslator"); self.resize(760,760); self.clipboard=QApplication.clipboard(); self.internal_clipboard_write=False; self.last_processed_clipboard_text:Optional[str]=None; self.last_detected_language=None; self.last_edited_language=None; self.translation_generation=0; self.worker_thread=None; self.worker=None; self.service=None; self._programmatic_update=False; self.edits={}
@@ -68,18 +74,19 @@ class MainWindow(QMainWindow):
         self.start_translation(text,source)
     def _translation_message(self,lang):return {"zh":"中文：翻译中......","en":"translating......","ja":"日本語：翻訳中......"}[lang]
     def start_translation(self,text,source):
-        if not self._ensure_service():return
         self.translation_generation+=1; generation=self.translation_generation; self._stop_worker(False); targets=[l for l in LANGUAGES if l!=source]
         for target in targets:self._set_edit(target,self._translation_message(target))
-        self.status.showMessage("状态：正在翻译……")
+        self.status.showMessage("状态：正在加载模型并翻译……" if self.service is None else "状态：正在翻译……")
         thread=QThread(self); worker=TranslationWorker(self.service,text,source,targets,generation); worker.moveToThread(thread); thread.started.connect(worker.run); worker.finished.connect(self._translation_finished); worker.failed.connect(self._translation_failed); worker.finished.connect(thread.quit); worker.failed.connect(thread.quit); thread.finished.connect(worker.deleteLater); thread.finished.connect(thread.deleteLater); thread.finished.connect(lambda t=thread:self._worker_done(t)); self.worker_thread=thread; self.worker=worker; thread.start()
     def _ensure_service(self):
         if self.service is not None:return True
         try:self.status.showMessage("状态：正在加载翻译模型……"); self.service=TranslatorService(); self.status.showMessage("状态：就绪"); return True
         except TranslationError as exc:self.status.showMessage(f"状态：{exc}"); QMessageBox.critical(self,"模型加载失败",str(exc)); return False
-    @Slot(int,dict)
-    def _translation_finished(self,generation,result):
+    @Slot(int,dict,object)
+    def _translation_finished(self,generation,result,service):
         if generation!=self.translation_generation:return
+        if self.service is None:
+            self.service = service
         for lang,value in result.items():self._set_edit(lang,value)
         self.status.showMessage("状态：翻译完成")
     @Slot(int,str)
