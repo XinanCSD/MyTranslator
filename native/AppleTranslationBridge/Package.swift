@@ -5,5 +5,6 @@ let package = Package(
     name: "AppleTranslationBridge",
     platforms: [.macOS(.v15)],
     products: [.executable(name: "apple-translation-bridge", targets: ["AppleTranslationBridge"])],
-    targets: [.executableTarget(name: "AppleTranslationBridge")]
+    targets: [.executableTarget(name: "AppleTranslationBridge")],
+    swiftLanguageModes: [.v5]
 )
