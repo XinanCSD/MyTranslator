@@ -11,7 +11,7 @@ from pathlib import Path
 import ctranslate2
 import sentencepiece as spm
 
-from config import BEAM_SIZE, LANGUAGES, MAX_DECODING_LENGTH, MODELS
+from config import (\n    BEAM_SIZE, LANGUAGES, LLAMA_CONTEXT_SIZE, LLAMA_PARALLEL_SLOTS,\n    MAX_DECODING_LENGTH, MODELS,\n)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +127,8 @@ class LlamaServer:
                 "-m", str(self.model_path),
                 "--host", "127.0.0.1",
                 "--port", str(self.port),
+                "--ctx-size", str(LLAMA_CONTEXT_SIZE),
+                "--parallel", str(LLAMA_PARALLEL_SLOTS),
                 "--no-jinja",
             ],
             stdout=subprocess.PIPE,
