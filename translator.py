@@ -138,23 +138,31 @@ class LlamaServer:
         self.stop()
         raise TranslationError("Timed out waiting for llama-server.")
 
-    def translate(self, prompt):
+    def translate(self, text, source_lang_code, target_lang_code):
+        payload = {
+            "messages": [{
+                "role": "user",
+                "content": [{
+                    "type": "text",
+                    "source_lang_code": source_lang_code,
+                    "target_lang_code": target_lang_code,
+                    "text": text,
+                }],
+            }],
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "top_k": 64,
+            "n_predict": 1024,
+        }
         request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/completion",
-            data=json.dumps({
-                "prompt": prompt,
-                "temperature": 0.3,
-                "top_p": 0.95,
-                "top_k": 64,
-                "n_predict": 1024,
-                "stop": ["<end_of_turn>", "<eos>"],
-            }).encode("utf-8"),
+            f"http://127.0.0.1:{self.port}/v1/chat/completions",
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
         try:
             with urllib.request.urlopen(request, timeout=180) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-                return payload.get("content", "").strip()
+                return payload["choices"][0]["message"]["content"].strip()
         except Exception as exc:
             raise TranslationError(f"TranslateGemma request failed: {exc}") from exc
 
@@ -181,27 +189,14 @@ class TranslateGemmaBackend:
         self.server = LlamaServer(model_dir, model_file)
         self.server.start()
 
-    def _prompt(self, text, source_lang, target_lang):
-        source_name, source_code = self.LANGUAGE_NAMES[source_lang]
-        target_name, target_code = self.LANGUAGE_NAMES[target_lang]
-        return (
-            "<bos><start_of_turn>user\\n"
-            f"You are a professional {source_name} ({source_code}) to "
-            f"{target_name} ({target_code}) translator. Your goal is to accurately "
-            f"convey the meaning and nuances of the original {source_name} text while "
-            f"adhering to {target_name} grammar, vocabulary, and cultural sensitivities.\\n"
-            f"Produce only the {target_name} translation, without any additional "
-            f"explanations or commentary. Please translate the following {source_name} "
-            f"text into {target_name}:\\n\\n\\n"
-            f"{text.strip()}<end_of_turn>\\n"
-            "<start_of_turn>model\\n"
-        )
 
     def translate_many(self, text, source_lang, target_langs):
         results = {}
+        source_code = self.LANGUAGE_NAMES[source_lang][1]
         for target in target_langs:
             if target in self.LANGUAGE_NAMES:
-                results[target] = self.server.translate(self._prompt(text, source_lang, target))
+                target_code = self.LANGUAGE_NAMES[target][1]
+                results[target] = self.server.translate(text, source_code, target_code)
         return results
 
     def close(self):
