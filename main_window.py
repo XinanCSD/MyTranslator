@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         root=QWidget(); layout=QVBoxLayout(root)
         for lang,copy_text in (("zh","复制"),("en","Copy"),("ja","コピー")):
             row=QHBoxLayout(); row.addWidget(QLabel(LANGUAGES[lang]["label"])); row.addStretch(1); b=QPushButton(copy_text); b.clicked.connect(lambda _,l=lang:self.copy_all(l)); row.addWidget(b); layout.addLayout(row)
-            edit=QPlainTextEdit(); edit.setMinimumHeight(150); edit.textChanged.connect(lambda l=lang:self.on_text_changed(l)); self.edits[lang]=edit; layout.addWidget(edit)
+            edit=QPlainTextEdit(); edit.setMinimumHeight(50); edit.textChanged.connect(lambda l=lang:self.on_text_changed(l)); self.edits[lang]=edit; layout.addWidget(edit)
         controls=QHBoxLayout(); self.auto_button=QPushButton("自动翻译：ON"); self.auto_button.setCheckable(True); self.auto_button.setChecked(True); self.auto_button.clicked.connect(self.on_auto_toggled); self.translate_button=QPushButton("翻译"); self.translate_button.clicked.connect(self.manual_translate); controls.addStretch(1); controls.addWidget(self.auto_button); controls.addWidget(self.translate_button); layout.addLayout(controls)
         self.setCentralWidget(root); self.status=QStatusBar(); self.setStatusBar(self.status); self.status.showMessage("状态：就绪"); self.clipboard.dataChanged.connect(self.on_clipboard_changed)
     def closeEvent(self,event): self.translation_generation+=1; self._stop_worker(True); super().closeEvent(event)
