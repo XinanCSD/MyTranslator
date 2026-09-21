@@ -110,15 +110,24 @@ class LlamaServer:
                 "--port", str(self.port),
                 "--jinja",
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
         )
 
         deadline = time.monotonic() + 90
         url = f"http://127.0.0.1:{self.port}/health"
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
-                raise TranslationError("llama-server exited during startup.")
+                stdout, stderr = self.process.communicate()
+                details = stderr.strip() or stdout.strip()
+                if len(details) > 4000:
+                    details = details[-4000:]
+                raise TranslationError(
+                    "llama-server exited during startup."
+                    + (f"\n{details}" if details else "")
+                )
             try:
                 with urllib.request.urlopen(url, timeout=1) as response:
                     if response.status == 200:
