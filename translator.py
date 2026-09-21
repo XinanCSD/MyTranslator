@@ -87,6 +87,25 @@ class LlamaServer:
             path = shutil.which(name)
             if path:
                 return path
+
+        # WinGet portable installs may expose command aliases only after a new
+        # shell starts. Find the installed executable directly as a fallback.
+        if sys.platform == "win32":
+            local_app_data = Path.home() / "AppData" / "Local"
+            roots = [
+                local_app_data / "Microsoft" / "WinGet" / "Packages",
+                local_app_data / "Microsoft" / "WinGet" / "Links",
+            ]
+            for root in roots:
+                if not root.exists():
+                    continue
+                try:
+                    matches = sorted(root.rglob("llama-server.exe"), reverse=True)
+                except OSError:
+                    matches = []
+                if matches:
+                    return str(matches[0])
+
         return None
 
     def start(self):
