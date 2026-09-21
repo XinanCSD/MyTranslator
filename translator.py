@@ -108,6 +108,7 @@ class LlamaServer:
                 "-m", str(self.model_path),
                 "--host", "127.0.0.1",
                 "--port", str(self.port),
+                "--jinja",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -161,32 +162,41 @@ class LlamaServer:
 
 
 class TranslateGemmaBackend:
+    LANGUAGE_NAMES = {
+        "zh": ("Chinese", "zh"),
+        "en": ("English", "en"),
+        "ja": ("Japanese", "ja"),
+    }
+
     def __init__(self, model_dir, model_file):
         self.server = LlamaServer(model_dir, model_file)
         self.server.start()
 
+    def _prompt(self, text, source_lang, target_lang):
+        source_name, source_code = self.LANGUAGE_NAMES[source_lang]
+        target_name, target_code = self.LANGUAGE_NAMES[target_lang]
+        return (
+            "<bos><start_of_turn>user\\n"
+            f"You are a professional {source_name} ({source_code}) to "
+            f"{target_name} ({target_code}) translator. Your goal is to accurately "
+            f"convey the meaning and nuances of the original {source_name} text while "
+            f"adhering to {target_name} grammar, vocabulary, and cultural sensitivities.\\n"
+            f"Produce only the {target_name} translation, without any additional "
+            f"explanations or commentary. Please translate the following {source_name} "
+            f"text into {target_name}:\\n\\n\\n"
+            f"{text.strip()}<end_of_turn>\\n"
+            "<start_of_turn>model\\n"
+        )
+
     def translate_many(self, text, source_lang, target_langs):
-        names = {"zh": "Chinese", "en": "English", "ja": "Japanese"}
         results = {}
         for target in target_langs:
-            prompt = (
-                f"Translate the following text from {names[source_lang]} to {names[target]}. "
-                "Return only the translation.\n\n"
-                f"{text}"
-            )
-            results[target] = self.server.translate(prompt)
+            if target in self.LANGUAGE_NAMES:
+                results[target] = self.server.translate(self._prompt(text, source_lang, target))
         return results
 
     def close(self):
         self.server.stop()
-
-
-class AppleTranslationBackend:
-    def __init__(self):
-        raise TranslationError(
-            "Apple Translation requires a native macOS Translation bridge; "
-            "the bridge is not included in this Python-only backend yet."
-        )
 
 
 class TranslatorService:
