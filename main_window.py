@@ -97,6 +97,6 @@ class MainWindow(QMainWindow):
         if self.worker_thread is thread:self.worker_thread=None; self.worker=None
     def _stop_worker(self,wait):
         if self.worker_thread and self.worker_thread.isRunning():
-            self.translation_generation+=1; self.worker_thread.quit()
+            self.worker_thread.quit()
             if wait:self.worker_thread.wait(5000)
         self.worker_thread=None; self.worker=None
