@@ -108,8 +108,7 @@ class LlamaServer:
                 "-m", str(self.model_path),
                 "--host", "127.0.0.1",
                 "--port", str(self.port),
-                "--jinja",
-                "--skip-chat-parsing",
+                "--no-jinja",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -139,31 +138,36 @@ class LlamaServer:
         self.stop()
         raise TranslationError("Timed out waiting for llama-server.")
 
-    def translate(self, text, source_lang_code, target_lang_code):
+    def translate(self, text, source_lang_name, target_lang_name):
+        prompt = (
+            "<bos><start_of_turn>user\n"
+            f"Translate the following text into {target_lang_name}. "
+            "Produce only the translation, without any additional explanations or commentary.\n\n"
+            f"{text.strip()}<end_of_turn>\n"
+            "<start_of_turn>model\n"
+        )
         payload = {
-            "messages": [{
-                "role": "user",
-                "content": [{
-                    "type": "text",
-                    "source_lang_code": source_lang_code,
-                    "target_lang_code": target_lang_code,
-                    "text": text,
-                }],
-            }],
+            "prompt": prompt,
             "temperature": 0.3,
             "top_p": 0.95,
             "top_k": 64,
             "n_predict": 1024,
+            "stop": ["<end_of_turn>", "<start_of_turn>"],
         }
         request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/v1/chat/completions",
+            f"http://127.0.0.1:{self.port}/completion",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
         try:
             with urllib.request.urlopen(request, timeout=180) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-                return payload["choices"][0]["message"]["content"].strip()
+                content = payload.get("content")
+                if not isinstance(content, str):
+                    raise TranslationError("TranslateGemma returned no text.")
+                return content.strip()
+        except TranslationError:
+            raise
         except Exception as exc:
             raise TranslationError(f"TranslateGemma request failed: {exc}") from exc
 
@@ -197,7 +201,9 @@ class TranslateGemmaBackend:
         for target in target_langs:
             if target in self.LANGUAGE_NAMES:
                 target_code = self.LANGUAGE_NAMES[target][1]
-                results[target] = self.server.translate(text, source_code, target_code)
+                source_name = self.LANGUAGE_NAMES[source_lang][0]
+                target_name = self.LANGUAGE_NAMES[target][0]
+                results[target] = self.server.translate(text, source_name, target_name)
         return results
 
     def close(self):
