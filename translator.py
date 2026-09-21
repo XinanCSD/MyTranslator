@@ -229,16 +229,24 @@ class AppleTranslationBackend:
             )
         except subprocess.TimeoutExpired as exc:
             raise TranslationError("Apple Translation timed out.") from exc
-        if completed.returncode != 0:
-            error = completed.stderr.decode("utf-8", errors="replace").strip()
-            raise TranslationError(error or "Apple Translation bridge failed.")
+        stdout = completed.stdout.decode("utf-8", errors="replace").strip()
+        stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+
         try:
-            response = json.loads(completed.stdout.decode("utf-8"))
+            response = json.loads(stdout) if stdout else None
         except json.JSONDecodeError as exc:
-            raise TranslationError("Invalid response from Apple Translation bridge.") from exc
-        if not response.get("ok"):
-            raise TranslationError(response.get("error") or "Apple Translation failed.")
-        return response["translation"]
+            response = None
+
+        if response is not None:
+            if not response.get("ok"):
+                raise TranslationError(response.get("error") or "Apple Translation failed.")
+            if completed.returncode != 0:
+                raise TranslationError(stderr or "Apple Translation bridge failed.")
+            return response["translation"]
+
+        if completed.returncode != 0:
+            raise TranslationError(stderr or "Apple Translation bridge failed.")
+        raise TranslationError("Invalid response from Apple Translation bridge.")
 
 
 class TranslatorService:
