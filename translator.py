@@ -109,6 +109,7 @@ class LlamaServer:
                 "--host", "127.0.0.1",
                 "--port", str(self.port),
                 "--jinja",
+                "--skip-chat-parsing",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
