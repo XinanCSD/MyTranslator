@@ -2,9 +2,12 @@ import logging
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QStatusBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QPlainTextEdit, QPushButton, QStatusBar, QVBoxLayout, QWidget,
+)
 
-from config import AUTO_TRANSLATE_MAX_CHARS, LANGUAGES, MODELS, PLACEHOLDER
+from config import AUTO_TRANSLATE_MAX_CHARS, LANGUAGES, MODELS, PLACEHOLDER, save_model
 from language_detector import detect_language
 from model_manager import ModelManager
 
@@ -114,7 +117,6 @@ class MainWindow(QMainWindow):
         self.translation_generation += 1
         self._stop_worker(True)
         self.model_manager.unload()
-        from config import save_model
         save_model(model_id)
         self.status.showMessage(f"状态：已选择 {MODELS[model_id]['label']}，等待翻译")
 
@@ -134,6 +136,10 @@ class MainWindow(QMainWindow):
             return
         self.last_processed_clipboard_text = text
         detection = detect_language(text, self.last_detected_language)
+        logger.info(
+            "Clipboard event received (length=%d, reliable=%s, language=%s)",
+            len(text.strip()), detection.reliable, detection.language
+        )
         if not detection.reliable or not detection.language:
             self.status.showMessage("状态：无法可靠判断语言，请编辑或手动翻译")
             return
@@ -209,10 +215,8 @@ class MainWindow(QMainWindow):
         targets = [l for l in LANGUAGES if l != source]
         for target in targets:
             self._set_edit(target, self._translation_message(target))
+        self.status.showMessage(f"状态：正在加载 {MODELS[model_id]['label']} 并翻译……")
 
-        self.status.showMessage(
-            f"状态：正在加载 {MODELS[model_id]['label']} 并翻译……"
-        )
         thread = QThread(self)
         worker = TranslationWorker(
             self.model_manager, model_id, text, source, targets, generation
