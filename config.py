@@ -1,10 +1,11 @@
-
 from pathlib import Path
+import json
 import sys
 
 BASE_DIR = Path(__file__).resolve().parent
 LOG_DIR = BASE_DIR / "logs"
 MODEL_ROOT = BASE_DIR / "models"
+SETTINGS_FILE = BASE_DIR / "settings.json"
 
 LANGUAGES = {
     "zh": {"label": "中文", "code": "zho_Hans"},
@@ -39,9 +40,25 @@ AUTO_TRANSLATE_MAX_CHARS = 200
 BEAM_SIZE = 2
 MAX_DECODING_LENGTH = 256
 PLACEHOLDER = "......"
-SETTINGS_FILE = BASE_DIR / "settings.json"
 
-def default_model_id() -> str:
-    if sys.platform == "darwin":
-        return "apple_translation"
-    return "translategemma_4b_q4km"
+
+def default_model_id():
+    return "apple_translation" if sys.platform == "darwin" else "translategemma_4b_q4km"
+
+
+def load_saved_model():
+    try:
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8")).get("model_id")
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def save_model(model_id):
+    try:
+        SETTINGS_FILE.write_text(
+            json.dumps({"model_id": model_id}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        # A read-only location should not prevent translation.
+        pass
