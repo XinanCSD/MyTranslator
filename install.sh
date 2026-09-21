@@ -28,6 +28,23 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
         exit 1
     fi
 
+    if ! command -v llama-server >/dev/null 2>&1; then
+        if command -v brew >/dev/null 2>&1; then
+            echo "llama-server was not found. Installing llama.cpp with Homebrew..."
+            brew install llama.cpp
+        else
+            echo "llama-server was not found and Homebrew is unavailable."
+            echo "Install llama.cpp so that llama-server is in PATH, then rerun ./install.sh."
+            exit 1
+        fi
+    fi
+
+    if ! command -v llama-server >/dev/null 2>&1; then
+        echo "llama-server is still not available after installing llama.cpp."
+        echo "Ensure llama-server is in PATH, then rerun ./install.sh."
+        exit 1
+    fi
+
     echo "Building AppleTranslationBridge..."
     swift build -c release --package-path native/AppleTranslationBridge
 else
