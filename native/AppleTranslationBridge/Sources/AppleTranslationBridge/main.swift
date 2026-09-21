@@ -19,23 +19,14 @@ struct BridgeView: View {
     let request: Request
     let completion: (Response) -> Void
 
-    @State private var configuration: TranslationSession.Configuration?
-
-    init(request: Request, completion: @escaping (Response) -> Void) {
-        self.request = request
-        self.completion = completion
-        _configuration = State(
-            initialValue: TranslationSession.Configuration(
-                source: Locale.Language(identifier: request.source),
-                target: Locale.Language(identifier: request.target)
-            )
-        )
-    }
-
     var body: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .translationTask(configuration) { session in
+        Text("Translating…")
+            .frame(width: 240, height: 80)
+            .translationTask(
+                source: Locale.Language(identifier: request.source),
+                target: Locale.Language(identifier: request.target),
+                preferredStrategy: .lowLatency
+            ) { session in
                 Task { @MainActor in
                     do {
                         let response = try await session.translate(request.text)
@@ -62,60 +53,59 @@ struct BridgeView: View {
 
 @main
 struct AppleTranslationBridge {
+    @MainActor
     static func main() {
         do {
             let data = FileHandle.standardInput.readDataToEndOfFile()
             let request = try JSONDecoder().decode(Request.self, from: data)
             run(request)
         } catch {
-            writeAndExit(
+            writeResponse(
                 Response(
                     ok: false,
                     translation: nil,
                     error: String(describing: error)
-                ),
-                status: 1
+                )
             )
+            Foundation.exit(1)
         }
     }
 
     @MainActor
     private static func run(_ request: Request) {
         let app = NSApplication.shared
-        app.setActivationPolicy(.accessory)
+        app.setActivationPolicy(.regular)
+        app.activate(ignoringOtherApps: true)
 
         var finished = false
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
-            styleMask: [],
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
+            styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
+        window.title = "MyTranslator"
         window.isReleasedWhenClosed = false
+        window.center()
         window.contentView = NSHostingView(
             rootView: BridgeView(request: request) { response in
                 guard !finished else { return }
                 finished = true
-                writeAndExit(response, status: response.ok ? 0 : 1)
+                writeResponse(response)
+                app.terminate(nil)
             }
         )
-        window.orderOut(nil)
 
+        window.makeKeyAndOrderFront(nil)
         app.run()
     }
 
-    @MainActor
-    private static func writeAndExit(_ response: Response, status: Int32) {
-        if let output = try? JSONEncoder().encode(response) {
-            FileHandle.standardOutput.write(output)
-            FileHandle.standardOutput.write(Data([10]))
+    private static func writeResponse(_ response: Response) {
+        guard let output = try? JSONEncoder().encode(response) else {
+            return
         }
-
-        if status == 0 {
-            NSApplication.shared.terminate(nil)
-        } else {
-            Foundation.exit(status)
-        }
+        FileHandle.standardOutput.write(output)
+        FileHandle.standardOutput.write(Data([10]))
     }
 }
