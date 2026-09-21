@@ -2,6 +2,7 @@ import json
 import logging
 import shutil
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -69,6 +70,7 @@ class NLLBBackend:
                 for lang, result in zip(targets, results)
             }
         except Exception as exc:
+            logger.exception("NLLB translation failed")
             raise TranslationError(f"NLLB translation failed: {exc}") from exc
 
 
@@ -80,7 +82,12 @@ class LlamaServer:
 
     @staticmethod
     def _executable():
-        return shutil.which("llama-server") or shutil.which("llama-server.exe")
+        names = ["llama-server.exe", "llama-server"] if sys.platform == "win32" else ["llama-server"]
+        for name in names:
+            path = shutil.which(name)
+            if path:
+                return path
+        return None
 
     def start(self):
         if self.process and self.process.poll() is None:
@@ -177,8 +184,8 @@ class TranslateGemmaBackend:
 class AppleTranslationBackend:
     def __init__(self):
         raise TranslationError(
-            "Apple Translation is not available through the current Python-only bridge. "
-            "A native macOS Translation bridge is required."
+            "Apple Translation requires a native macOS Translation bridge; "
+            "the bridge is not included in this Python-only backend yet."
         )
 
 
