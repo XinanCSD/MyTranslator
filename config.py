@@ -10,5 +10,13 @@ LANGUAGES = {
     "en": {"label": "English", "code": "eng_Latn"},
     "ja": {"label": "日本語", "code": "jpn_Jpan"},
 }
-AUTO_TRANSLATE_MAX_CHARS = 300
+
+# The 600M model is relatively weak on longer inputs, so automatic
+# translation is limited to shorter clipboard text.
+AUTO_TRANSLATE_MAX_CHARS = 200
+
+# Keep decoding bounded to avoid very long or repetitive generations.
+BEAM_SIZE = 2
+MAX_DECODING_LENGTH = 256
+
 PLACEHOLDER = "......"
