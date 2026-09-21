@@ -15,16 +15,16 @@ if [[ -z "$PYTHON" ]]; then
     exit 1
 fi
 
-if [[ ! -d .venv ]]; then "$PYTHON" -m venv .venv; fi
+if [[ ! -d .venv ]]; then
+    "$PYTHON" -m venv .venv
+fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
 
-if ! command -v llama-server >/dev/null 2>&1; then
-    if command -v brew >/dev/null 2>&1; then
-        brew install llama.cpp
-    else
-        echo "llama-server was not found and Homebrew is unavailable."
-        echo "Install llama.cpp (llama-server) manually, then rerun ./install.sh."
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    if ! command -v llama-server >/dev/null 2>&1; then
+        echo "llama-server was not found."
+        echo "Install llama.cpp and ensure llama-server is in PATH, then rerun ./install.sh."
         exit 1
     fi
 fi
