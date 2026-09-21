@@ -14,9 +14,9 @@ The selected model is loaded only when the first translation is requested. Only 
 
 ### TranslateGemma
 
-The TranslateGemma backend uses the local GGUF model with `llama-server`. The translation request is rendered from Google's structured TranslateGemma format with explicit source and target language codes.
+The TranslateGemma backend uses the local GGUF model with `llama-server`. MyTranslator uses the ordinary Gemma conversational format supported by the 42ailab GGUF adaptation, with explicit source and target language names and an instruction to output only the translation.
 
-The 42ailab GGUF repository documents llama.cpp usage and identifies `translategemma-4b-it-Q4_K_M.gguf` as the Q4_K_M model file. Its model card also explicitly notes that its ordinary instruction-style chat prompt is not the upstream official TranslateGemma template. MyTranslator therefore uses the structured translation format rather than that chat adaptation.
+The 42ailab GGUF repository documents llama.cpp usage and identifies `translategemma-4b-it-Q4_K_M.gguf` as the Q4_K_M model file. Its model card explicitly notes that its ordinary instruction-style chat prompt is not the upstream official TranslateGemma template.
 
 ### Apple Translation
 
@@ -50,7 +50,9 @@ Install llama.cpp separately and ensure `llama-server` is available in PATH.
 
 Run `install.bat`, then `run.bat`.
 
-Install llama.cpp separately and ensure `llama-server.exe` is available in PATH.
+If `llama-server.exe` is not already available, `install.bat` automatically installs the official llama.cpp WinGet package when WinGet is available. The installer also handles the case where the newly installed WinGet command alias is not yet visible in the current terminal.
+
+If WinGet is unavailable, install llama.cpp manually and ensure `llama-server.exe` is available in PATH.
 
 Installation creates/reuses `.venv`, installs Python dependencies, prepares/checks the local runtime, and downloads/reuses model files.
 
