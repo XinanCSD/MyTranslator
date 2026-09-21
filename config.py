@@ -60,5 +60,4 @@ def save_model(model_id):
             encoding="utf-8",
         )
     except OSError:
-        # A read-only location should not prevent translation.
         pass
