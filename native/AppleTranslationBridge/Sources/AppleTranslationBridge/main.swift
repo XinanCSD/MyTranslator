@@ -15,7 +15,7 @@ struct Response: Encodable {
 
 func run(_ request: Request) async -> Response {
     do {
-        let session = try await TranslationSession(
+        let session = TranslationSession(
             installedSource: Locale.Language(identifier: request.source),
             target: Locale.Language(identifier: request.target)
         )
