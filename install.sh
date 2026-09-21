@@ -21,7 +21,16 @@ fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
 
-if [[ "$(uname -s)" != "Darwin" ]]; then
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    if ! command -v swift >/dev/null 2>&1; then
+        echo "Swift is required to build AppleTranslationBridge."
+        echo "Install Xcode or the Swift toolchain, then rerun ./install.sh."
+        exit 1
+    fi
+
+    echo "Building AppleTranslationBridge..."
+    swift build -c release --package-path native/AppleTranslationBridge
+else
     if ! command -v llama-server >/dev/null 2>&1; then
         echo "llama-server was not found."
         echo "Install llama.cpp and ensure llama-server is in PATH, then rerun ./install.sh."
