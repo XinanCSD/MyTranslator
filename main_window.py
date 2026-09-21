@@ -84,9 +84,9 @@ class MainWindow(QMainWindow):
         except TranslationError as exc:self.status.showMessage(f"状态：{exc}"); QMessageBox.critical(self,"模型加载失败",str(exc)); return False
     @Slot(int,dict,object)
     def _translation_finished(self,generation,result,service):
-        if generation!=self.translation_generation:return
         if self.service is None:
             self.service = service
+        if generation!=self.translation_generation:return
         for lang,value in result.items():self._set_edit(lang,value)
         self.status.showMessage("状态：翻译完成")
     @Slot(int,str)
