@@ -11,7 +11,10 @@ from pathlib import Path
 import ctranslate2
 import sentencepiece as spm
 
-from config import (\n    BEAM_SIZE, LANGUAGES, LLAMA_CONTEXT_SIZE, LLAMA_PARALLEL_SLOTS,\n    MAX_DECODING_LENGTH, MODELS,\n)
+from config import (
+    BEAM_SIZE, LANGUAGES, LLAMA_CONTEXT_SIZE, LLAMA_PARALLEL_SLOTS,
+    MAX_DECODING_LENGTH, MODELS,
+)
 
 logger = logging.getLogger(__name__)
 
