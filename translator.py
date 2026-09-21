@@ -223,4 +223,70 @@ class TranslatorService:
     def close(self):
         close = getattr(self.backend, "close", None)
         if close:
+            close()class AppleTranslationBackend:
+    def __init__(self):
+        if sys.platform != "darwin":
+            raise TranslationError("Apple Translation is only available on macOS.")
+        root = Path(__file__).resolve().parent
+        candidates = [
+            root / "native" / "AppleTranslationBridge" / ".build" / "release" / "apple-translation-bridge",
+            root / "native" / "AppleTranslationBridge" / ".build" / "debug" / "apple-translation-bridge",
+        ]
+        self.executable = next((p for p in candidates if p.exists()), None)
+        if self.executable is None:
+            raise TranslationError("Apple Translation bridge is not built. Run ./install.sh on macOS.")
+
+    def translate_many(self, text, source_lang, target_langs):
+        return {target: self._translate_one(text, source_lang, target) for target in target_langs}
+
+    def _translate_one(self, text, source_lang, target_lang):
+        payload = json.dumps({
+            "source": LANGUAGES[source_lang]["code"].split("_")[0],
+            "target": LANGUAGES[target_lang]["code"].split("_")[0],
+            "text": text,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            completed = subprocess.run(
+                [str(self.executable)], input=payload,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=180, check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TranslationError("Apple Translation timed out.") from exc
+        if completed.returncode != 0:
+            error = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise TranslationError(error or "Apple Translation bridge failed.")
+        try:
+            response = json.loads(completed.stdout.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise TranslationError("Invalid response from Apple Translation bridge.") from exc
+        if not response.get("ok"):
+            raise TranslationError(response.get("error") or "Apple Translation failed.")
+        return response["translation"]
+
+
+class TranslatorService:
+    def __init__(self, model_id):
+        info = MODELS.get(model_id)
+        if not info:
+            raise TranslationError(f"Unknown model: {model_id}")
+        self.model_id = model_id
+        backend = info["backend"]
+        if backend == "nllb":
+            self.backend = NLLBBackend(info["model_dir"])
+        elif backend == "llama":
+            self.backend = TranslateGemmaBackend(info["model_dir"], info["model_file"])
+        elif backend == "apple":
+            self.backend = AppleTranslationBackend()
+        else:
+            raise TranslationError(f"Unsupported backend: {backend}")
+
+    def translate_many(self, text, source_lang, targets):
+        if source_lang not in LANGUAGES:
+            raise TranslationError(f"Unsupported source language: {source_lang}")
+        return self.backend.translate_many(text, source_lang, targets)
+
+    def close(self):
+        close = getattr(self.backend, "close", None)
+        if close:
             close()
