@@ -19,14 +19,23 @@ struct BridgeView: View {
     let request: Request
     let completion: (Response) -> Void
 
+    @State private var configuration: TranslationSession.Configuration?
+
+    init(request: Request, completion: @escaping (Response) -> Void) {
+        self.request = request
+        self.completion = completion
+        _configuration = State(
+            initialValue: TranslationSession.Configuration(
+                source: Locale.Language(identifier: request.source),
+                target: Locale.Language(identifier: request.target)
+            )
+        )
+    }
+
     var body: some View {
         Text("Translating…")
             .frame(width: 240, height: 80)
-            .translationTask(
-                source: Locale.Language(identifier: request.source),
-                target: Locale.Language(identifier: request.target),
-                preferredStrategy: .lowLatency
-            ) { session in
+            .translationTask(configuration) { session in
                 Task { @MainActor in
                     do {
                         let response = try await session.translate(request.text)
