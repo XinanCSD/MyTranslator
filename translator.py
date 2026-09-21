@@ -1,10 +1,7 @@
 import json
 import logging
-import os
 import shutil
-import signal
 import subprocess
-import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -13,13 +10,7 @@ from pathlib import Path
 import ctranslate2
 import sentencepiece as spm
 
-from config import (
-    BEAM_SIZE,
-    LANGUAGES,
-    MAX_DECODING_LENGTH,
-    MODELS,
-    SETTINGS_FILE,
-)
+from config import BEAM_SIZE, LANGUAGES, MAX_DECODING_LENGTH, MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -31,79 +22,91 @@ class TranslationError(RuntimeError):
 class NLLBTokenizer:
     EOS_TOKEN = "</s>"
 
-    def __init__(self, model_dir: Path):
-        sp_path = model_dir / "sentencepiece.bpe.model"
+    def __init__(self, model_dir):
+        sp_path = Path(model_dir) / "sentencepiece.bpe.model"
         if not sp_path.exists():
             raise TranslationError(f"Tokenizer model not found: {sp_path}")
         self.sp = spm.SentencePieceProcessor()
         if not self.sp.Load(str(sp_path)):
             raise TranslationError(f"Failed to load tokenizer model: {sp_path}")
 
-    def encode(self, text: str, source_lang: str) -> list[str]:
+    def encode(self, text, source_lang):
         return [source_lang, *self.sp.EncodeAsPieces(text.strip()), self.EOS_TOKEN]
 
-    def decode(self, tokens: list[str]) -> str:
+    def decode(self, tokens):
         return self.sp.DecodePieces(tokens).strip()
 
 
 class NLLBBackend:
-    def __init__(self, model_dir: Path):
-        if not Path(model_dir).exists():
+    def __init__(self, model_dir):
+        model_dir = Path(model_dir)
+        if not model_dir.exists():
             raise TranslationError(
                 f"NLLB model not found: {model_dir}. Run the installation script first."
             )
         try:
             self.translator = ctranslate2.Translator(str(model_dir), device="auto")
-            self.tokenizer = NLLBTokenizer(Path(model_dir))
+            self.tokenizer = NLLBTokenizer(model_dir)
         except Exception as exc:
             logger.exception("Failed to load NLLB")
             raise TranslationError(f"Failed to load NLLB: {exc}") from exc
 
     def translate_many(self, text, source_lang, target_langs):
-        source_code = LANGUAGES[source_lang]["code"]
         targets = [x for x in target_langs if x in LANGUAGES and x != source_lang]
         if not targets:
             return {}
-        source = self.tokenizer.encode(text, source_code)
-        results = self.translator.translate_batch(
-            [source] * len(targets),
-            target_prefix=[[LANGUAGES[x]["code"]] for x in targets],
-            beam_size=BEAM_SIZE,
-            max_decoding_length=MAX_DECODING_LENGTH,
-            max_input_length=1024,
-        )
-        return {
-            lang: self.tokenizer.decode(result.hypotheses[0][1:])
-            for lang, result in zip(targets, results)
-        }
+        try:
+            source = self.tokenizer.encode(text, LANGUAGES[source_lang]["code"])
+            results = self.translator.translate_batch(
+                [source] * len(targets),
+                target_prefix=[[LANGUAGES[x]["code"]] for x in targets],
+                beam_size=BEAM_SIZE,
+                max_decoding_length=MAX_DECODING_LENGTH,
+                max_input_length=1024,
+            )
+            return {
+                lang: self.tokenizer.decode(result.hypotheses[0][1:])
+                for lang, result in zip(targets, results)
+            }
+        except Exception as exc:
+            raise TranslationError(f"NLLB translation failed: {exc}") from exc
 
 
 class LlamaServer:
-    def __init__(self, model_dir: Path, model_file: str):
-        self.model_dir = Path(model_dir)
-        self.model_file = model_file
+    def __init__(self, model_dir, model_file):
+        self.model_path = Path(model_dir) / model_file
         self.process = None
         self.port = 39001
+
+    @staticmethod
+    def _executable():
+        return shutil.which("llama-server") or shutil.which("llama-server.exe")
 
     def start(self):
         if self.process and self.process.poll() is None:
             return
-        server = shutil.which("llama-server") or shutil.which("llama-server.exe")
-        if not server:
+        executable = self._executable()
+        if not executable:
             raise TranslationError(
                 "llama-server was not found. Run the installation script first."
             )
-        model_path = self.model_dir / self.model_file
-        if not model_path.exists():
+        if not self.model_path.exists():
             raise TranslationError(
-                f"TranslateGemma model not found: {model_path}. Run the installation script first."
+                f"TranslateGemma model not found: {self.model_path}. Run the installation script first."
             )
+
         self.process = subprocess.Popen(
-            [server, "-m", str(model_path), "--host", "127.0.0.1", "--port", str(self.port)],
+            [
+                executable,
+                "-m", str(self.model_path),
+                "--host", "127.0.0.1",
+                "--port", str(self.port),
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        deadline = time.monotonic() + 60
+
+        deadline = time.monotonic() + 90
         url = f"http://127.0.0.1:{self.port}/health"
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
@@ -114,9 +117,11 @@ class LlamaServer:
                         return
             except (OSError, urllib.error.URLError):
                 time.sleep(0.5)
+
+        self.stop()
         raise TranslationError("Timed out waiting for llama-server.")
 
-    def translate(self, prompt: str) -> str:
+    def translate(self, prompt):
         request = urllib.request.Request(
             f"http://127.0.0.1:{self.port}/completion",
             data=json.dumps({
@@ -137,35 +142,33 @@ class LlamaServer:
             raise TranslationError(f"TranslateGemma request failed: {exc}") from exc
 
     def stop(self):
-        if not self.process:
+        process, self.process = self.process, None
+        if process is None or process.poll() is not None:
             return
-        if self.process.poll() is None:
-            try:
-                self.process.terminate()
-                self.process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
-        self.process = None
+        try:
+            process.terminate()
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
 
 class TranslateGemmaBackend:
-    def __init__(self, model_dir: Path, model_file: str):
+    def __init__(self, model_dir, model_file):
         self.server = LlamaServer(model_dir, model_file)
         self.server.start()
 
     def translate_many(self, text, source_lang, target_langs):
-        # Adapt the source/target information to TranslateGemma's instruction format.
         names = {"zh": "Chinese", "en": "English", "ja": "Japanese"}
-        result = {}
+        results = {}
         for target in target_langs:
             prompt = (
                 f"Translate the following text from {names[source_lang]} to {names[target]}. "
                 "Return only the translation.\n\n"
                 f"{text}"
             )
-            result[target] = self.server.translate(prompt)
-        return result
+            results[target] = self.server.translate(prompt)
+        return results
 
     def close(self):
         self.server.stop()
@@ -174,46 +177,33 @@ class TranslateGemmaBackend:
 class AppleTranslationBackend:
     def __init__(self):
         raise TranslationError(
-            "Apple Translation backend is not available in the current Python runtime. "
-            "Add the native macOS Translation bridge before selecting it."
+            "Apple Translation is not available through the current Python-only bridge. "
+            "A native macOS Translation bridge is required."
         )
 
 
 class TranslatorService:
-    def __init__(self, model_id: str):
-        self.model_id = model_id
-        self.backend = self._create_backend(model_id)
-
-    def _create_backend(self, model_id):
+    def __init__(self, model_id):
         info = MODELS.get(model_id)
         if not info:
             raise TranslationError(f"Unknown model: {model_id}")
-        if info["backend"] == "nllb":
-            return NLLBBackend(info["model_dir"])
-        if info["backend"] == "llama":
-            return TranslateGemmaBackend(info["model_dir"], info["model_file"])
-        if info["backend"] == "apple":
-            return AppleTranslationBackend()
-        raise TranslationError(f"Unsupported backend: {info['backend']}")
+        self.model_id = model_id
+        backend = info["backend"]
+        if backend == "nllb":
+            self.backend = NLLBBackend(info["model_dir"])
+        elif backend == "llama":
+            self.backend = TranslateGemmaBackend(info["model_dir"], info["model_file"])
+        elif backend == "apple":
+            self.backend = AppleTranslationBackend()
+        else:
+            raise TranslationError(f"Unsupported backend: {backend}")
 
     def translate_many(self, text, source_lang, targets):
+        if source_lang not in LANGUAGES:
+            raise TranslationError(f"Unsupported source language: {source_lang}")
         return self.backend.translate_many(text, source_lang, targets)
 
     def close(self):
         close = getattr(self.backend, "close", None)
         if close:
             close()
-
-
-def load_saved_model() -> str | None:
-    try:
-        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8")).get("model_id")
-    except (OSError, ValueError, TypeError):
-        return None
-
-
-def save_model(model_id: str):
-    SETTINGS_FILE.write_text(
-        json.dumps({"model_id": model_id}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
