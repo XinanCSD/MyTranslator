@@ -39,6 +39,13 @@ MODELS = {
 AUTO_TRANSLATE_MAX_CHARS = 200
 BEAM_SIZE = 2
 MAX_DECODING_LENGTH = 256
+
+# TranslateGemma / llama-server runtime settings.
+# Increase LLAMA_CONTEXT_SIZE if longer documents need to be translated.
+# LLAMA_PARALLEL_SLOTS controls how many requests can be processed concurrently.
+LLAMA_CONTEXT_SIZE = 4096
+LLAMA_PARALLEL_SLOTS = 1
+
 PLACEHOLDER = "......"
 
 
