@@ -199,31 +199,7 @@ class TranslateGemmaBackend:
         self.server.stop()
 
 
-class TranslatorService:
-    def __init__(self, model_id):
-        info = MODELS.get(model_id)
-        if not info:
-            raise TranslationError(f"Unknown model: {model_id}")
-        self.model_id = model_id
-        backend = info["backend"]
-        if backend == "nllb":
-            self.backend = NLLBBackend(info["model_dir"])
-        elif backend == "llama":
-            self.backend = TranslateGemmaBackend(info["model_dir"], info["model_file"])
-        elif backend == "apple":
-            self.backend = AppleTranslationBackend()
-        else:
-            raise TranslationError(f"Unsupported backend: {backend}")
-
-    def translate_many(self, text, source_lang, targets):
-        if source_lang not in LANGUAGES:
-            raise TranslationError(f"Unsupported source language: {source_lang}")
-        return self.backend.translate_many(text, source_lang, targets)
-
-    def close(self):
-        close = getattr(self.backend, "close", None)
-        if close:
-            close()class AppleTranslationBackend:
+class AppleTranslationBackend:
     def __init__(self):
         if sys.platform != "darwin":
             raise TranslationError("Apple Translation is only available on macOS.")
