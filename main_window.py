@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QClipboard
-from PySide6.QtWidgets import QHBoxLayout,QLabel,QMainWindow,QMessageBox,QPlainTextEdit,QPushButton,QStatusBar,QVBoxLayout,QWidget
+from PySide6.QtWidgets import QApplication,QHBoxLayout,QLabel,QMainWindow,QMessageBox,QPlainTextEdit,QPushButton,QStatusBar,QVBoxLayout,QWidget
 from config import AUTO_TRANSLATE_MAX_CHARS,LANGUAGES,PLACEHOLDER
 from language_detector import detect_language
 from translator import TranslationError,TranslatorService
@@ -16,7 +16,7 @@ class TranslationWorker(QObject):
         except Exception as exc:logger.exception("Translation worker failed"); self.failed.emit(self.generation,str(exc))
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle("MyTranslator"); self.resize(760,760); self.clipboard=QClipboard(self); self.internal_clipboard_write=False; self.last_processed_clipboard_text:Optional[str]=None; self.last_detected_language=None; self.last_edited_language=None; self.translation_generation=0; self.worker_thread=None; self.worker=None; self.service=None; self._programmatic_update=False; self.edits={}
+        super().__init__(); self.setWindowTitle("MyTranslator"); self.resize(760,760); self.clipboard=QApplication.clipboard(); self.internal_clipboard_write=False; self.last_processed_clipboard_text:Optional[str]=None; self.last_detected_language=None; self.last_edited_language=None; self.translation_generation=0; self.worker_thread=None; self.worker=None; self.service=None; self._programmatic_update=False; self.edits={}
         root=QWidget(); layout=QVBoxLayout(root)
         for lang,copy_text in (("zh","复制"),("en","Copy"),("ja","コピー")):
             row=QHBoxLayout(); row.addWidget(QLabel(LANGUAGES[lang]["label"])); row.addStretch(1); b=QPushButton(copy_text); b.clicked.connect(lambda _,l=lang:self.copy_all(l)); row.addWidget(b); layout.addLayout(row)
