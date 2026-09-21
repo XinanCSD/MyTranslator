@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+import shiboken6
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -255,9 +256,18 @@ class MainWindow(QMainWindow):
             self.worker = None
 
     def _stop_worker(self, wait):
-        if self.worker_thread and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            if wait:
-                self.worker_thread.wait(5000)
+        thread = self.worker_thread
         self.worker_thread = None
         self.worker = None
+        if thread is None or not shiboken6.isValid(thread):
+            return
+        try:
+            if not thread.isRunning():
+                return
+            thread.quit()
+            if wait:
+                thread.wait(5000)
+        except RuntimeError:
+            # The Qt C++ object may have been deleted while the Python
+            # wrapper is still referenced. Treat it as already stopped.
+            return
